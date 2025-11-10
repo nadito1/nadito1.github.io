@@ -6,7 +6,8 @@
   <title>Ingresar · Mis Finanzas 2.0</title>
   <style>
     :root{--panel:#fff;--text:#0f172a;--muted:#64748b;--accent:#38bdf8}
-    *{box-sizing:border-box} body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#eef2f7;color:var(--text)}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#eef2f7;color:var(--text)}
     .wrap{max-width:480px;margin:8vh auto;padding:16px}
     .card{background:var(--panel);border-radius:14px;box-shadow:0 10px 30px rgba(2,6,23,.08);padding:20px}
     h1{margin:.2rem 0 1rem;display:flex;gap:.6rem;align-items:center;font-size:1.1rem}
@@ -18,7 +19,7 @@
     .primary{background:var(--accent);color:#fff}
     .ghost{background:#1118270f;color:#111827;border:1px solid #e5e7eb}
     .muted{color:var(--muted);font-size:.9rem}
-    #msg{margin-top:.6rem;color:#ef4444;font-size:.9rem;min-height:1.2em}
+    #msg{margin-top:.6rem;font-size:.9rem;min-height:1.2em}
   </style>
 </head>
 <body>
@@ -39,52 +40,96 @@
     </div>
   </div>
 
-  <!-- Firebase compat -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <!-- Firebase compat (con defer para orden de carga) -->
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
   <script>
-    // Config de TU proyecto (la que ya usaste)
-    const firebaseConfig = {
-      apiKey: "AIzaSyAoS2NRmIQ1kL97stj1x0kJfBkcby2bdkw",
-      authDomain: "mis-finanzas-2.firebaseapp.com",
-      projectId: "mis-finanzas-2",
-      storageBucket: "mis-finanzas-2.firebasestorage.app",
-      messagingSenderId: "178519871416",
-      appId: "1:178519871416:web:f49bc2c66d61e6ae15094d"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const auth = firebase.auth();
+    // Espera a que carguen los SDKs (por si el navegador retrasa los scripts con defer)
+    window.addEventListener('DOMContentLoaded', () => {
+      // Config de TU proyecto
+      const firebaseConfig = {
+        apiKey: "AIzaSyAoS2NRmIQ1kL97stj1x0kJfBkcby2bdkw",
+        authDomain: "mis-finanzas-2.firebaseapp.com",
+        projectId: "mis-finanzas-2",
+        storageBucket: "mis-finanzas-2.firebasestorage.app", // no afecta al login
+        messagingSenderId: "178519871416",
+        appId: "1:178519871416:web:f49bc2c66d61e6ae15094d"
+      };
 
-    const $ = s => document.querySelector(s);
-    const msg = $('#msg');
+      // Protege doble inicialización si este index se reusa en otra vista
+      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
 
-    // Si ya hay sesión, vamos directo a la app
-    auth.onAuthStateChanged(user => {
-      if (user) location.href = 'app.html';
+      const $ = s => document.querySelector(s);
+      const msg = $('#msg');
+      const btnLogin  = $('#btnLogin');
+      const btnSignup = $('#btnSignup');
+      const btnReset  = $('#btnReset');
+
+      function setMsg(text, color='#ef4444'){ msg.textContent = text || ''; msg.style.color = color; }
+      function setBusy(b=true){
+        [btnLogin, btnSignup, btnReset].forEach(bn => { bn.disabled = b; bn.style.opacity = b ? .6 : 1; });
+      }
+
+      // Si ya hay sesión, vamos directo a la app
+      auth.onAuthStateChanged(user => {
+        if (user) {
+          // Redirige sin dejar "index" en el historial
+          location.replace('app.html');
+        }
+      });
+
+      btnLogin.onclick = async () => {
+        setMsg(''); setBusy(true);
+        const email = $('#email').value.trim();
+        const pass  = $('#password').value;
+        try {
+          await auth.signInWithEmailAndPassword(email, pass);
+          // onAuthStateChanged hará el redirect
+        } catch(e){
+          handleAuthError(e);
+        } finally { setBusy(false); }
+      };
+
+      btnSignup.onclick = async () => {
+        setMsg(''); setBusy(true);
+        const email = $('#email').value.trim();
+        const pass  = $('#password').value;
+        try {
+          await auth.createUserWithEmailAndPassword(email, pass);
+          setMsg('Cuenta creada. Ahora podés iniciar sesión.', '#16a34a');
+        } catch(e){
+          handleAuthError(e);
+        } finally { setBusy(false); }
+      };
+
+      btnReset.onclick = async () => {
+        setMsg(''); setBusy(true);
+        const email = $('#email').value.trim();
+        if(!email){ setMsg('Ingresá tu email para enviarte el enlace.'); setBusy(false); return; }
+        try {
+          await auth.sendPasswordResetEmail(email);
+          setMsg('Te enviamos el correo de restablecimiento.', '#0ea5e9');
+        } catch(e){
+          handleAuthError(e);
+        } finally { setBusy(false); }
+      };
+
+      function handleAuthError(e){
+        // Mensajes más claros para casos típicos
+        const code = e && e.code ? e.code : 'auth/error';
+        const map = {
+          'auth/invalid-credential': 'Credencial inválida. Revisá email/contraseña o volvé a iniciar sesión.',
+          'auth/invalid-email': 'Email inválido.',
+          'auth/user-not-found': 'No existe una cuenta con ese email.',
+          'auth/wrong-password': 'Contraseña incorrecta.',
+          'auth/too-many-requests': 'Demasiados intentos. Probá más tarde o restablecé la contraseña.',
+          'auth/network-request-failed': 'Fallo de red. Verificá tu conexión.',
+        };
+        setMsg(map[code] || (e.message || code));
+      }
     });
-
-    $('#btnLogin').onclick = async () => {
-      msg.textContent = '';
-      const email = $('#email').value.trim();
-      const pass  = $('#password').value;
-      try { await auth.signInWithEmailAndPassword(email, pass); }
-      catch(e){ msg.textContent = e.message || e.code; }
-    };
-    $('#btnSignup').onclick = async () => {
-      msg.textContent = '';
-      const email = $('#email').value.trim();
-      const pass  = $('#password').value;
-      try { await auth.createUserWithEmailAndPassword(email, pass); msg.style.color='#16a34a'; msg.textContent='Cuenta creada. Ahora podés iniciar sesión.'; }
-      catch(e){ msg.style.color='#ef4444'; msg.textContent = e.message || e.code; }
-    };
-    $('#btnReset').onclick = async () => {
-      msg.textContent = '';
-      const email = $('#email').value.trim();
-      if(!email){ msg.textContent='Ingresá tu email para enviarte el enlace.'; return; }
-      try { await auth.sendPasswordResetEmail(email); msg.style.color='#0ea5e9'; msg.textContent='Te enviamos el correo de restablecimiento.'; }
-      catch(e){ msg.style.color='#ef4444'; msg.textContent = e.message || e.code; }
-    };
   </script>
 </body>
 </html>
