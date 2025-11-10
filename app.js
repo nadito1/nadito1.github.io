@@ -1,5 +1,5 @@
 // app.js — SOLO JS (sin <html>, <head> ni <script>)
-// Crea botón fijo "Cerrar sesión" y expone window.initUserApp(root, user)
+// Crea botón fijo "Cerrar sesión" y expone window.initApp(root, user)  // CAMBIO
 
 (function ensureFixedSignout(){
   if (!document.getElementById('mf-signout-fixed')) {
@@ -27,9 +27,12 @@
 })();
 
 // -------------------------------------------------------------
-// window.initUserApp(root, user)
+// window.initApp(root, user)  // CAMBIO: renombrado desde initUserApp
 // -------------------------------------------------------------
-window.initUserApp = function(root, user){
+window.initApp = function(root, user){  // CAMBIO
+  // Guardas de seguridad (por si user viene null en alguna carga rara)  // CAMBIO
+  if (!user || !user.uid) { user = { uid: 'guest', email: 'Invitado' }; }  // CAMBIO
+
   // STORAGE por usuario
   const USER_PREFIX = `mf2.${user.uid}.`;
   const STORAGE_KEY = USER_PREFIX + "finanzas_total_v6_fechas_emojis";
@@ -1059,41 +1062,6 @@ window.initUserApp = function(root, user){
   selCartera.onchange=()=>{renderGastos();renderIngresos();recalc();renderGraficos();};
 
   // ====== Inicio ======
-  function renderUsdHist(){
-    const ctx=chartUsd.getContext("2d");
-    const w=ctx.canvas.width=ctx.canvas.clientWidth||320;
-    const h=ctx.canvas.height=ctx.canvas.clientHeight||120;
-    ctx.clearRect(0,0,w,h);
-    ctx.fillStyle="#0f172a";ctx.font="11px sans-serif";ctx.fillText("Histórico dólar",10,12);
-    const hist=data.usdHist||[];
-    listaUsd.innerHTML="";
-    if(!hist.length){ctx.fillText("Sin datos",10,30);return;}
-    hist.slice().reverse().forEach(item=>{
-      const li=document.createElement("li");
-      const d=new Date(item.ts);
-      li.textContent=`${d.toLocaleString()} -> $${item.valor}`;
-      listaUsd.appendChild(li);
-    });
-    const max=Math.max(...hist.map(h=>h.valor),1);
-    const step=(w-40)/Math.max(hist.length-1,1);
-    const bottom=h-20,top=25,ch=bottom-top;
-    ctx.strokeStyle="#38bdf8";ctx.beginPath();
-    hist.forEach((p,i)=>{
-      const x=20+i*step;
-      const y=bottom-(p.valor/max)*ch;
-      if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    });
-    ctx.stroke();
-  }
-  function renderGraficos(){
-    const anio=selAnio.value, mes=selMes.value;
-    const presupuesto=calcularPresupuestoDesdeSubcats();
-    const gastosMes=data.gastos.filter(g=>String(g.anio)===anio && String(g.mes)===mes).filter(filtroPorCartera);
-    const total=gastosMes.reduce((a,g)=>a+g.montoARS,0);
-    drawBarChart(chart1.getContext("2d"),["Presu","Gastado"],[presupuesto,total],"Comparativa del mes");
-    const porCat={};gastosMes.forEach(g=>{porCat[g.cat]=(porCat[g.cat]||0)+g.montoARS;});
-    drawPieChart(chart2.getContext("2d"),porCat,"Por categoría");
-  }
   function initAfterDataChange(){
     initSelectors();
     renderCategoriasPanel();
@@ -1119,4 +1087,5 @@ window.initUserApp = function(root, user){
   actualizarFechasHeader();
 };
 
-
+// (Compat opcional, por si en algún lado quedó el nombre viejo)  // CAMBIO
+window.initUserApp = window.initApp;  // CAMBIO
