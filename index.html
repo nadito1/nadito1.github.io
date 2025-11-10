@@ -80,7 +80,7 @@
         apiKey: "AIzaSyAoS2NRmIQ1kL97stj1x0kJfBkcby2bdkw",
         authDomain: "mis-finanzas-2.firebaseapp.com",
         projectId: "mis-finanzas-2",
-        storageBucket: "mis-finanzas-2.firebasestorage.app",
+        <mark style="background:yellow">storageBucket: "mis-finanzas-2.appspot.com", <!-- CAMBIO: dominio estándar --> </mark>
         messagingSenderId: "178519871416",
         appId: "1:178519871416:web:f49bc2c66d61e6ae15094d"
       };
@@ -119,8 +119,7 @@
             appRoot.innerHTML = '<p style="color:#ef4444">No se pudo iniciar la app. Revisá la consola.</p>';
           }
         } else {
-          // Mensaje guía si aún no definiste initApp
-          appRoot.innerHTML = '<p class="muted">Cargó app.js, pero no se encontró <code>window.initApp(root, user)</code>.</p>';
+          <mark style="background:yellow">appRoot.innerHTML = '<p class="muted">Cargó <code>app.js</code>, pero no se encontró <code>window.initApp(root, user)</code>. Definila en <code>app.js</code> y exponela con <code>window.initApp = initApp;</code>.</p>'; <!-- CAMBIO: mensaje más claro --></mark>
         }
       }
       function showLoginUI(){
@@ -179,3 +178,4 @@
   </script>
 </body>
 </html>
+
