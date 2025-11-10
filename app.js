@@ -1,5 +1,5 @@
 // app.js — SOLO JS (sin <html>, <head> ni <script>)
-// Crea botón fijo "Cerrar sesión" y expone window.initApp(root, user)  // CAMBIO
+// Crea botón fijo "Cerrar sesión" y expone window.initUserApp(root, user)
 
 (function ensureFixedSignout(){
   if (!document.getElementById('mf-signout-fixed')) {
@@ -27,14 +27,15 @@
 })();
 
 // -------------------------------------------------------------
-// window.initApp(root, user)  // CAMBIO: renombrado desde initUserApp
+// window.initUserApp(root, user)
 // -------------------------------------------------------------
-window.initApp = function(root, user){  // CAMBIO
-  // Guardas de seguridad (por si user viene null en alguna carga rara)  // CAMBIO
-  if (!user || !user.uid) { user = { uid: 'guest', email: 'Invitado' }; }  // CAMBIO
+window.initUserApp = function(root, user){
+  // CAMBIO: tolerar user nulo y root faltante
+  if (!root) { console.error('initUserApp: falta root'); return; } // CAMBIO
+  const uid = (user && user.uid) ? user.uid : 'anon'; // CAMBIO
 
   // STORAGE por usuario
-  const USER_PREFIX = `mf2.${user.uid}.`;
+  const USER_PREFIX = `mf2.${uid}.`; // CAMBIO (antes usaba user.uid directo)
   const STORAGE_KEY = USER_PREFIX + "finanzas_total_v6_fechas_emojis";
 
   // ====== Datos base + carga inicial ======
@@ -958,134 +959,4 @@ window.initApp = function(root, user){  // CAMBIO
       const li=document.createElement("li");
       li.innerHTML=`${d.desc} - $${d.saldo.toLocaleString("es-AR")} ${d.vto?("(vto "+d.vto+")"):""} <button class="mini-btn" data-del="${d.id}" type="button">🗑️</button>`;
       listaDeudas.appendChild(li);
-      if(d.vto && d.vto.startsWith(mesActual)) totalMes+=d.saldo;
-    });
-    txtDeudaMes.textContent=totalMes>0?`Este mes vence aprox $${totalMes.toLocaleString("es-AR")}`:"";
-    listaDeudas.querySelectorAll("button[data-del]").forEach(b=>{
-      b.onclick=()=>{
-        if(readOnly) return;
-        const id=parseInt(b.dataset.del);
-        data.deudas=data.deudas.filter(x=>x.id!==id);
-        guardarData();renderDeudas();
-      };
-    });
-  }
-
-  // ====== Tags ======
-  function renderTagsReport(){
-    const anio=selAnio.value, mes=selMes.value;
-    const map={};
-    data.gastos.filter(g=>String(g.anio)===anio && String(g.mes)===mes).forEach(g=>{
-      (g.tags||"").split(" ").forEach(t=>{
-        t=t.trim();
-        if(!t) return;
-        if(!t.startsWith("#")) t="#"+t;
-        map[t]=(map[t]||0)+g.montoARS;
-      });
-    });
-    listaTags.innerHTML="";
-    Object.entries(map).sort((a,b)=>b[1]-a[1]).forEach(([tag,val])=>{
-      const li=document.createElement("li");
-      li.textContent=`${tag}: $${val.toLocaleString("es-AR",{maximumFractionDigits:0})}`;
-      listaTags.appendChild(li);
-    });
-  }
-
-  // ====== Simulador ======
-  btnSimular.onclick=()=>{
-    const anio=selAnio.value, mes=selMes.value;
-    const gastosMes=data.gastos.filter(g=>String(g.anio)===anio && String(g.mes)===mes);
-    const ingresosMes=data.ingresos.filter(i=>String(i.anio)===anio && String(i.mes)===mes);
-    let totalG=gastosMes.reduce((a,g)=>a+g.montoARS,0);
-    let totalI=ingresosMes.reduce((a,i)=>a+i.montoARS,0);
-    const d=parseFloat(simDolar.value||0);
-    const gP=parseFloat(simGastoPct.value||0);
-    const iP=parseFloat(simIngPct.value||0);
-    if(gP) totalG=totalG*(1+gP/100);
-    if(iP) totalI=totalI*(1+iP/100);
-    let msg=`Gastos sim: $${totalG.toLocaleString("es-AR")} / Ingresos sim: $${totalI.toLocaleString("es-AR")} -> Saldo $${(totalI-totalG).toLocaleString("es-AR")}`;
-    if(d>0) msg+=` | USD ref: ${d}`;
-    txtSimResultado.textContent=msg;
-  };
-
-  // ====== Búsqueda global ======
-  globalSearch.oninput=()=>{
-    const q=globalSearch.value.toLowerCase();
-    if(!q){globalResults.classList.add("hidden");return;}
-    const res=[];
-    data.gastos.forEach(g=>{
-      const txt=(g.cat+" "+(g.subcat||"")+" "+(g.desc||"")+" "+(g.tags||"")).toLowerCase();
-      if(txt.includes(q)) res.push({tipo:"gasto",txt:`${g.fecha} ${g.cat}/${g.subcat||""} $${g.montoARS}`,id:g.id});
-    });
-    data.ingresos.forEach(i=>{
-      const txt=(i.tipo+" "+(i.desc||"")).toLowerCase();
-      if(txt.includes(q)) res.push({tipo:"ing",txt:`${i.fecha} ${i.tipo} $${i.montoARS}`,id:i.id});
-    });
-    data.notas.forEach(n=>{
-      if(n.txt.toLowerCase().includes(q)) res.push({tipo:"nota",txt:n.txt,id:n.id});
-    });
-    globalResults.innerHTML="<h4>Resultados</h4>";
-    res.slice(0,30).forEach(r=>{
-      const d=document.createElement("div");d.textContent=r.txt;globalResults.appendChild(d);
-    });
-    globalResults.classList.remove("hidden");
-  };
-
-  // ====== Objetivo anual ======
-  btnObjAnual.onclick=()=>{
-    if(readOnly) return;
-    data.objAnual.ahorro=parseFloat(inpObjAnual.value||0);
-    guardarData();renderObjAnualEstado();
-  };
-  function renderObjAnualEstado(){
-    const anio=selAnio.value;
-    const obj=data.objAnual.ahorro||0;
-    if(!obj){txtObjAnualEstado.textContent="Sin objetivo anual de ahorro";return;}
-    let ah=0;
-    for(let m=1;m<=12;m++){
-      const mm=String(m).padStart(2,"0");
-      const ing=data.ingresos.filter(i=>String(i.anio)===anio && String(i.mes)===mm).reduce((a,b)=>a+b.montoARS,0);
-      const ga=data.gastos.filter(i=>String(i.anio)===anio && String(i.mes)===mm).reduce((a,b)=>a+b.montoARS,0);
-      ah+=Math.max(0,ing-ga);
-    }
-    txtObjAnualEstado.textContent=`Ahorro acumulado $${ah.toLocaleString("es-AR")} / Objetivo $${obj.toLocaleString("es-AR")}`;
-    inpObjAnual.value=obj||"";
-  }
-
-  // ====== Readonly + Dark ======
-  chkReadonly.onchange=()=>{ readOnly=chkReadonly.checked; document.body.classList.toggle("read-only",readOnly); };
-  chkDark.onchange=()=>{ document.body.classList.toggle("dark",chkDark.checked); guardarData(); };
-
-  // ====== Cambios de mes / año / cartera ======
-  selMes.onchange = ()=>{loadHeader();renderGastos();renderIngresos();renderPresupuestoPorSubcat();recalc();renderGraficos();renderInflacion();renderTagsReport();};
-  selAnio.onchange= ()=>{loadHeader();renderGastos();renderIngresos();renderPresupuestoPorSubcat();recalc();renderGraficos();renderInflacion();renderTagsReport();};
-  selCartera.onchange=()=>{renderGastos();renderIngresos();recalc();renderGraficos();};
-
-  // ====== Inicio ======
-  function initAfterDataChange(){
-    initSelectors();
-    renderCategoriasPanel();
-    renderSelects();
-    loadHeader();
-    renderCarterasSelects();
-    renderCarterasPanel();
-    renderGastos();
-    renderIngresos();
-    renderPresupuestoPorSubcat();
-    recalc();
-    renderGraficos();
-    renderInflacion();
-    renderNotas();
-    renderRecurrentes();
-    renderUsdHist();
-    renderTagsReport();
-    renderDeudas();
-    renderObjAnualEstado();
-    setTimeout(liberarFechas,500);
-  }
-  initAfterDataChange();
-  actualizarFechasHeader();
-};
-
-// (Compat opcional, por si en algún lado quedó el nombre viejo)  // CAMBIO
-window.initUserApp = window.initApp;  // CAMBIO
+     
