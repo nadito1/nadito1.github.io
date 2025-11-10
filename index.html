@@ -3,13 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ingresar · Mis Finanzas 2.0</title>
+  <title>Mis Finanzas 2.0</title>
   <style>
-    :root{--panel:#fff;--text:#0f172a;--muted:#64748b;--accent:#38bdf8}
+    :root{--panel:#fff;--text:#0f172a;--muted:#64748b;--accent:#38bdf8;--danger:#ef4444}
     *{box-sizing:border-box}
     body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:#eef2f7;color:var(--text)}
-    .wrap{max-width:480px;margin:8vh auto;padding:16px}
+    .wrap{max-width:1200px;margin:0 auto;padding:16px}
     .card{background:var(--panel);border-radius:14px;box-shadow:0 10px 30px rgba(2,6,23,.08);padding:20px}
+
+    /* LOGIN */
+    #auth{max-width:480px;margin:8vh auto}
     h1{margin:.2rem 0 1rem;display:flex;gap:.6rem;align-items:center;font-size:1.1rem}
     .logo{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#0ea5e9)}
     label{display:block;margin:.4rem 0 .2rem;font-size:.86rem}
@@ -20,11 +23,18 @@
     .ghost{background:#1118270f;color:#111827;border:1px solid #e5e7eb}
     .muted{color:var(--muted);font-size:.9rem}
     #msg{margin-top:.6rem;font-size:.9rem;min-height:1.2em}
+
+    /* APP SHELL */
+    #app.hidden{display:none}
+    #appHeader{display:flex;justify-content:space-between;align-items:center;margin:12px 0}
+    #userBadge{color:var(--muted);font-size:.9rem}
+    #btnSignout{background:var(--danger);color:#fff}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="card">
+    <!-- ============ LOGIN ============ -->
+    <section id="auth" class="card">
       <h1><span class="logo"></span> <span>Ingresá a <strong>Mis Finanzas 2.0</strong></span></h1>
       <label>Email</label>
       <input id="email" type="email" autocomplete="email" placeholder="tu@email.com" />
@@ -36,88 +46,124 @@
         <button id="btnReset" class="ghost">Restablecer</button>
       </div>
       <div id="msg"></div>
-      <p class="muted" style="margin-top:10px">Al ingresar, te redirigimos a tu app.</p>
-    </div>
+      <p class="muted" style="margin-top:10px">Tus datos se guardan por usuario. Al ingresar, se cargará tu tablero.</p>
+    </section>
+
+    <!-- ============ APP (SPA) ============ -->
+    <section id="app" class="hidden">
+      <div id="appHeader">
+        <h2 style="margin:0;display:flex;gap:.6rem;align-items:center">
+          <span class="logo" style="width:28px;height:28px"></span>
+          <span>💼 Mis Finanzas 2.0</span>
+        </h2>
+        <div style="display:flex;gap:.6rem;align-items:center">
+          <span id="userBadge">—</span>
+          <button id="btnSignout">Cerrar sesión</button>
+        </div>
+      </div>
+      <!-- Aquí se monta tu app.js -->
+      <div id="app-root" class="card"></div>
+    </section>
   </div>
 
-  <!-- Firebase compat (con defer para orden de carga) -->
+  <!-- Firebase compat -->
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script defer src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 
+  <!-- Tu lógica de la app (debe exponer window.initApp(rootEl, user)) -->
+  <script defer src="app.js"></script>
+
   <script>
-    // Espera a que carguen los SDKs (por si el navegador retrasa los scripts con defer)
-    window.addEventListener('DOMContentLoaded', () => {
-      // Config de TU proyecto
+    window.addEventListener('DOMContentLoaded', async () => {
+      // Config de TU proyecto Firebase
       const firebaseConfig = {
         apiKey: "AIzaSyAoS2NRmIQ1kL97stj1x0kJfBkcby2bdkw",
         authDomain: "mis-finanzas-2.firebaseapp.com",
         projectId: "mis-finanzas-2",
-        storageBucket: "mis-finanzas-2.firebasestorage.app", // no afecta al login
+        storageBucket: "mis-finanzas-2.firebasestorage.app",
         messagingSenderId: "178519871416",
         appId: "1:178519871416:web:f49bc2c66d61e6ae15094d"
       };
-
-      // Protege doble inicialización si este index se reusa en otra vista
       if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
       const auth = firebase.auth();
 
+      // Persistencia "local" para no perder sesión en GitHub Pages
+      try { await auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch {}
+
       const $ = s => document.querySelector(s);
+      const authView = $('#auth');
+      const appView  = $('#app');
       const msg = $('#msg');
       const btnLogin  = $('#btnLogin');
       const btnSignup = $('#btnSignup');
       const btnReset  = $('#btnReset');
+      const btnSignout= $('#btnSignout');
+      const userBadge = $('#userBadge');
+      const appRoot   = $('#app-root');
 
       function setMsg(text, color='#ef4444'){ msg.textContent = text || ''; msg.style.color = color; }
       function setBusy(b=true){
-        [btnLogin, btnSignup, btnReset].forEach(bn => { bn.disabled = b; bn.style.opacity = b ? .6 : 1; });
+        [btnLogin, btnSignup, btnReset].forEach(bn => { if(bn){ bn.disabled = b; bn.style.opacity = b ? .6 : 1; }});
+      }
+      function showAppUI(user){
+        authView.classList.add('hidden');
+        appView.classList.remove('hidden');
+        userBadge.textContent = user.email || 'Conectado';
+
+        // Monta tu app.js si lo expusiste como initApp
+        if (typeof window.initApp === 'function') {
+          try {
+            window.initApp(appRoot, user); // <-- tu app recibe user
+          } catch (e) {
+            console.error('Error al montar app.js', e);
+            appRoot.innerHTML = '<p style="color:#ef4444">No se pudo iniciar la app. Revisá la consola.</p>';
+          }
+        } else {
+          // Mensaje guía si aún no definiste initApp
+          appRoot.innerHTML = '<p class="muted">Cargó app.js, pero no se encontró <code>window.initApp(root, user)</code>.</p>';
+        }
+      }
+      function showLoginUI(){
+        appView.classList.add('hidden');
+        authView.classList.remove('hidden');
+        appRoot.innerHTML = '';
       }
 
-      // Si ya hay sesión, vamos directo a la app
+      // Estado de sesión
       auth.onAuthStateChanged(user => {
-        if (user) {
-          // Redirige sin dejar "index" en el historial
-          location.replace('app.html');
-        }
+        if (user) showAppUI(user); else showLoginUI();
       });
 
+      // Acciones de login
       btnLogin.onclick = async () => {
         setMsg(''); setBusy(true);
-        const email = $('#email').value.trim();
-        const pass  = $('#password').value;
-        try {
-          await auth.signInWithEmailAndPassword(email, pass);
-          // onAuthStateChanged hará el redirect
-        } catch(e){
-          handleAuthError(e);
-        } finally { setBusy(false); }
+        const email = document.getElementById('email').value.trim();
+        const pass  = document.getElementById('password').value;
+        try { await auth.signInWithEmailAndPassword(email, pass); }
+        catch(e){ handleAuthError(e); }
+        finally { setBusy(false); }
       };
-
       btnSignup.onclick = async () => {
         setMsg(''); setBusy(true);
-        const email = $('#email').value.trim();
-        const pass  = $('#password').value;
-        try {
-          await auth.createUserWithEmailAndPassword(email, pass);
-          setMsg('Cuenta creada. Ahora podés iniciar sesión.', '#16a34a');
-        } catch(e){
-          handleAuthError(e);
-        } finally { setBusy(false); }
+        const email = document.getElementById('email').value.trim();
+        const pass  = document.getElementById('password').value;
+        try { await auth.createUserWithEmailAndPassword(email, pass); setMsg('Cuenta creada. Ya podés ingresar.', '#16a34a'); }
+        catch(e){ handleAuthError(e); }
+        finally { setBusy(false); }
       };
-
       btnReset.onclick = async () => {
         setMsg(''); setBusy(true);
-        const email = $('#email').value.trim();
+        const email = document.getElementById('email').value.trim();
         if(!email){ setMsg('Ingresá tu email para enviarte el enlace.'); setBusy(false); return; }
-        try {
-          await auth.sendPasswordResetEmail(email);
-          setMsg('Te enviamos el correo de restablecimiento.', '#0ea5e9');
-        } catch(e){
-          handleAuthError(e);
-        } finally { setBusy(false); }
+        try { await auth.sendPasswordResetEmail(email); setMsg('Te enviamos el correo de restablecimiento.', '#0ea5e9'); }
+        catch(e){ handleAuthError(e); }
+        finally { setBusy(false); }
+      };
+      btnSignout.onclick = async () => {
+        try { await auth.signOut(); } catch {}
       };
 
       function handleAuthError(e){
-        // Mensajes más claros para casos típicos
         const code = e && e.code ? e.code : 'auth/error';
         const map = {
           'auth/invalid-credential': 'Credencial inválida. Revisá email/contraseña o volvé a iniciar sesión.',
